@@ -23,6 +23,31 @@ The mental model, written to displace CSS instincts rather than sit alongside th
 - when `UIListLayout` / `UIFlexItem` / `UISizeConstraint` **are** the right call
 - a full CSS-to-Roblox translation table, and an anti-pattern catalogue
 
+### `roblox-element-placement`
+
+Element by element: what each icon, label, badge and button is *for*, which frame **owns** it, and
+where it sits relative to that frame.
+
+Exists to stop two specific errors that web instincts produce:
+
+- **Assuming an element is inside the frame it belongs to.** Nothing clips by default in Roblox, so
+  chrome routinely *straddles* an edge — a close button whose centre sits on the top-right corner, a
+  header badge hanging off the left edge. Placing these inside is a different design, not a rounding
+  error.
+- **Assuming containment decides ownership.** A button hanging entirely outside a panel still belongs
+  to it; a tooltip drawn on top of it belongs to neither.
+
+`scripts/place.mjs` makes this deterministic — give it two bounding boxes and it returns the signed
+edge deltas, the placement class, and the exact `Size`/`AnchorPoint`/`Position` to reproduce it:
+
+```sh
+node skills/roblox-element-placement/scripts/place.mjs \
+  --frame 95,84,961,570 --element 923,78,972,125 --name Close
+# CLASS: STRADDLE — 6px past the top edge, 11px past the right edge
+# AnchorPoint = Vector2.new(0.5, 0.5)
+# Position    = UDim2.new(1, -13, 0, 18)
+```
+
 ### `roblox-frame-identification`
 
 The first workflow skill: take a reference, isolate one frame, rebuild it, verify it.

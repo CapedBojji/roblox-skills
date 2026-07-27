@@ -62,6 +62,32 @@ percentage in pixels.
 
 AnchorPoint does not change `Size`. It *does* move the origin used by `Rotation` and `UIScale`.
 
+### Children are not confined to their parent
+
+Every row above keeps the child *inside*. That is the CSS reflex, and it is only half the story:
+**nothing clips by default in Roblox** (`ClipsDescendants` is `false`), so a child may sit partly or
+entirely outside its parent. This is not a hack — it is how real Roblox UI pins badges and corner
+buttons, and placing them inside instead produces a visibly different design.
+
+```lua
+-- centre exactly on the parent's top-right corner: the button overhangs on both axes
+AnchorPoint = Vector2.new(0.5, 0.5)
+Position    = UDim2.fromScale(1, 0)
+
+-- centre on the left edge, 20px down: most of a wide badge hangs off to the left
+AnchorPoint = Vector2.new(0.5, 0.5)
+Position    = UDim2.new(0, 0, 0, 20)
+```
+
+With `AnchorPoint (0.5, 0.5)` and the position on the edge, exactly half the element sits outside.
+Tune the balance with the offset, not by switching to a corner anchor — a corner anchor stops
+tracking the edge when the parent resizes.
+
+Two requirements: the parent must not set `ClipsDescendants = true`, and the child needs a `ZIndex`
+that wins wherever it overlaps a neighbour.
+
+For classifying these placements from a reference, see the `roblox-element-placement` skill.
+
 ## Scale or offset?
 
 The single most useful table in this skill. When in doubt: **things that should track the screen

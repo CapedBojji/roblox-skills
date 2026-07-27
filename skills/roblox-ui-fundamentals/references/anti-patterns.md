@@ -182,7 +182,23 @@ Reading it in the same tick you build the UI gives zeros, and layout math built 
 collapses. If you genuinely need it, wait for
 `GetPropertyChangedSignal("AbsoluteSize")` — but first check whether scale sizing removes the need.
 
-## 15. Hardcoding a design-resolution pixel grid
+## 15. Tucking overhanging chrome inside the frame
+
+```lua
+-- WRONG: the reference shows the close button straddling the corner; this hides that entirely
+close.AnchorPoint = Vector2.new(1, 0)
+close.Position    = UDim2.new(1, -12, 0, 12)
+```
+```lua
+-- RIGHT: centre on the edge, so it deliberately overhangs
+close.AnchorPoint = Vector2.new(0.5, 0.5)
+close.Position    = UDim2.new(1, -13, 0, 18)
+```
+The CSS reflex is that chrome lives inside its container. Roblox does not clip by default, and
+header badges, corner buttons and notification dots routinely hang outside. Measure the signed edge
+deltas before placing: a negative delta means it belongs outside.
+
+## 16. Hardcoding a design-resolution pixel grid
 
 Laying the whole UI out in 1920x1080 pixel coordinates and hoping is the web habit that transfers
 worst. The output looks perfect in Studio at one window size and wrong on every device. Convert to

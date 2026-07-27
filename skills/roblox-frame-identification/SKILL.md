@@ -90,6 +90,11 @@ The cases that come up most:
 The full ~24-row catalogue, the two-panel procedure, and worked tree cuts for three archetypes are in
 `references/boundary-rules.md`.
 
+> **Placing the elements.** Once the boundary is settled, use the `roblox-element-placement` skill
+> for each element's purpose, owning frame and position — especially anything near an edge. Chrome
+> that straddles or hangs outside the frame is normal in Roblox and is the placement most easily got
+> wrong; `../roblox-element-placement/scripts/place.mjs` decides it from signed edge deltas rather than by eye.
+
 ## Phase 3 — The frame spec
 
 Write `<storyRoot>/<Name>.frame.md` next to the story it will produce. Template and a fully worked
