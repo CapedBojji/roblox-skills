@@ -61,6 +61,8 @@ It resolves the config, starts or reuses the dev server, resolves the story id, 
 the instance tree and any renderer warnings, and screenshots the preview. It exits non-zero on a
 render error so a failure cannot pass silently. `--help` documents every flag.
 
-Requirements: a StoryBlox project, [Zune](https://zune.sh/) on `PATH` (the dev server refuses to boot
-without it), and optionally `playwright-core` for screenshots — without it the tree and warnings
-still work.
+Requirements: a StoryBlox project, and [Zune](https://zune.sh/) on `PATH` — the dev server refuses to
+boot without it, so there is no render path at all until it is installed.
+
+`playwright-core` is optional. Without it the script still renders the story and prints the instance
+tree and renderer warnings; only the screenshots are skipped.

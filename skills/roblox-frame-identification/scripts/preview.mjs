@@ -86,13 +86,19 @@ function findConfig(startDir) {
   }
 }
 
-// The config is TypeScript, so rather than importing it we read the handful of fields we need.
-// `port` is the only one that changes where we connect; the server itself does the real parsing.
+// The config is TypeScript, so rather than importing it we read the one field we need.
+// `port` is the only value that changes where we connect; the server does the real parsing.
+//
+// Comments are stripped first: `String.match` returns the FIRST hit, so a commented-out
+// `// port: 3000` sitting above the real one would otherwise win. The line-comment pattern
+// deliberately does not fire on `://`, so a URL in the config is not mistaken for a comment.
 function readPort(configPath) {
   try {
-    const src = readFileSync(configPath, "utf8");
-    const m = src.match(/\bport\s*:\s*(\d+)/);
-    return m ? Number(m[1]) : 4500;
+    const src = readFileSync(configPath, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    const m = src.match(/(^|[{,\s])port\s*:\s*(\d+)/);
+    return m ? Number(m[2]) : 4500;
   } catch {
     return 4500;
   }
