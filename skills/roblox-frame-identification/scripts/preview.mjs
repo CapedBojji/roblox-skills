@@ -2,8 +2,12 @@
 // Render a StoryBlox story, print its resolved instance tree and warnings, and screenshot the
 // browser preview. Part of the roblox-frame-identification skill.
 //
-// Exit codes: 0 ok · 1 render error (or --strict with warnings) · 2 zune missing ·
-//             3 deps missing · 4 config/rojo missing or invalid · 5 server never became ready
+// Exit codes: 0 ok · 1 render error (or --strict with warnings) · 2 server reported Zune missing ·
+//             4 bad args, or config/rojo missing or invalid · 5 server never became ready
+//
+// StoryBlox v0.1.1+ ships a standalone binary with Zune bundled, so Zune on PATH and an installed
+// node_modules are no longer prerequisites — preflight only warns, and the server's own startup
+// failure is what decides.
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
@@ -12,7 +16,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-const EXIT = { OK: 0, RENDER: 1, ZUNE: 2, DEPS: 3, CONFIG: 4, SERVER: 5 };
+const EXIT = { OK: 0, RENDER: 1, ZUNE: 2, CONFIG: 4, SERVER: 5 };
 
 const HELP = `
 preview.mjs — render a StoryBlox story, dump its tree, screenshot the preview
@@ -23,6 +27,7 @@ Options
   --story <path>       Story file to render. Required.
   --config <path>      ui-claps.config.ts. Default: walk up from --story.
   --url <origin>       Use an already-running server (skips spawn + preflight).
+  --storyblox <path>   Standalone storyblox binary to launch (bundles Zune).
   --props '<json>'     Props for /api/render. Default: {}
                        NOTE: affects render.json only, never the screenshot.
   --out <dir>          Artifact directory. Default: .storyblox-verify
@@ -47,10 +52,12 @@ function parseArgs(argv) {
     json: false,
     help: false,
   };
-  const takesValue = new Set(["--story", "--config", "--url", "--props", "--out", "--viewport", "--capture"]);
+  const takesValue = new Set([
+    "--story", "--config", "--url", "--props", "--out", "--viewport", "--capture", "--storyblox",
+  ]);
   const key = {
     "--story": "story", "--config": "config", "--url": "url", "--props": "props",
-    "--out": "outDir", "--viewport": "viewport", "--capture": "capture",
+    "--out": "outDir", "--viewport": "viewport", "--capture": "capture", "--storyblox": "storyblox",
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -106,22 +113,29 @@ function readPort(configPath) {
 
 // ---------------------------------------------------------------- preflight
 
-function preflight(configPath) {
+// Locate the standalone StoryBlox binary (v0.1.1+), which bundles Zune and needs no node_modules.
+function findStorybloxBinary(explicit) {
+  if (explicit) return existsSync(explicit) ? explicit : null;
+  const found = spawnSync("sh", ["-c", "command -v storyblox"], { encoding: "utf8" });
+  const path = found.status === 0 ? found.stdout.trim() : "";
+  return path || null;
+}
+
+// Advisory only. The standalone binary bundles Zune and ships without node_modules, so neither
+// check is a hard requirement any more — the authoritative answer is whether the server boots,
+// and ensureServer() maps that failure to the right exit code.
+function preflight(configPath, binary, log) {
+  if (binary) return;
+
   const zune = spawnSync("zune", ["--version"], { encoding: "utf8" });
   if (zune.error || zune.status !== 0) {
-    die(
-      EXIT.ZUNE,
-      'StoryBlox requires Zune to execute Luau stories, but "zune" is not available.',
-      "",
-      "Install it from https://zune.sh/ and put it on PATH, or `mise use zune@0.5.7`,",
-      "or set zuneCommand in ui-claps.config.ts to an absolute path.",
-      "The dev server refuses to boot without it — there is no render path.",
-    );
+    log('note: "zune" is not on PATH. The npm/source install needs it (https://zune.sh/);');
+    log("      the standalone storyblox binary bundles it — pass --storyblox <path> to use one.");
   }
 
   const projectRoot = dirname(configPath);
   if (!existsSync(join(projectRoot, "node_modules"))) {
-    die(EXIT.DEPS, `No node_modules in ${projectRoot}. Run: pnpm install`);
+    log(`note: no node_modules in ${projectRoot}. Run \`pnpm install\`, or use the standalone binary.`);
   }
 }
 
@@ -140,7 +154,7 @@ async function fetchProject(origin, timeoutMs = 1500) {
   }
 }
 
-async function ensureServer(origin, configPath, log) {
+async function ensureServer(origin, configPath, binary, log) {
   const existing = await fetchProject(origin);
   if (existing) {
     log(`server ${origin} (reused)`);
@@ -150,8 +164,13 @@ async function ensureServer(origin, configPath, log) {
     die(EXIT.SERVER, `No server at ${origin} and no config to start one from.`);
   }
 
-  log(`starting server for ${configPath} …`);
-  const child = spawn("npx", ["storyblox", "dev", "--config", configPath], {
+  // Prefer the standalone binary (bundles Zune, no node_modules needed); fall back to npx.
+  const [cmd, args] = binary
+    ? [binary, ["dev", "--config", configPath]]
+    : ["npx", ["storyblox", "dev", "--config", configPath]];
+
+  log(`starting server via ${binary ? binary : "npx storyblox"} for ${configPath} …`);
+  const child = spawn(cmd, args, {
     cwd: dirname(configPath),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
@@ -175,6 +194,21 @@ async function ensureServer(origin, configPath, log) {
   if (/Zune/i.test(stderr)) die(EXIT.ZUNE, stderr.trim());
   if (/config was not found|must set (root|rojoProject)|Rojo/i.test(stderr)) {
     die(EXIT.CONFIG, stderr.trim());
+  }
+  // storyblox is not published to npm, so the npx fallback 404s unless it is linked locally.
+  if (!binary && /404|not in this registry|E404/i.test(stderr)) {
+    die(
+      EXIT.SERVER,
+      "`npx storyblox` failed: the package is not on the public npm registry.",
+      "",
+      "Use the standalone binary instead — it bundles Zune and needs nothing else:",
+      "  curl -sSL -o storyblox \\",
+      "    https://github.com/CapedBojji/storyblox/releases/download/v0.1.1/storyblox-linux-x64",
+      "  chmod +x storyblox",
+      "  node preview.mjs --story <story> --storyblox ./storyblox",
+      "",
+      "Or start a server yourself and pass --url <origin>.",
+    );
   }
   die(EXIT.SERVER, `Server at ${origin} never became ready.`, stderr.trim());
 }
@@ -217,9 +251,11 @@ const HEADLINE = [
 
 function renderTree(node, prefix = "", isLast = true, isRoot = true) {
   const lines = [];
-  const label = node.name && node.name !== node.className
-    ? `${node.name} (${node.className})`
-    : node.className;
+  // The server may carry the instance name in `name`, or leave it in props as `Name` (which is
+  // what the adapter produces). Prefer whichever is present — the frame spec is name-driven, so a
+  // tree without names is far less useful to diff against it.
+  const name = node.name ?? (typeof node.props?.Name === "string" ? node.props.Name : undefined);
+  const label = name && name !== node.className ? `${name} (${node.className})` : node.className;
 
   const props = HEADLINE
     .filter((k) => node.props && node.props[k] !== undefined)
@@ -400,6 +436,7 @@ async function main() {
   const storyReal = realpathSync(storyPath);
 
   let configPath = null;
+  let binary = null;
   let origin = args.url;
 
   if (!origin) {
@@ -414,11 +451,13 @@ async function main() {
         "See references/storyblox-setup.md for a minimal scaffold.",
       );
     }
-    preflight(configPath);
+    binary = findStorybloxBinary(args.storyblox);
+    if (args.storyblox && !binary) die(EXIT.CONFIG, `--storyblox path not found: ${args.storyblox}`);
+    preflight(configPath, binary, log);
     origin = `http://localhost:${readPort(configPath)}`;
   }
 
-  const { manifest, child } = await ensureServer(origin, configPath, log);
+  const { manifest, child } = await ensureServer(origin, configPath, binary, log);
 
   for (const w of manifest.warnings ?? []) console.error(`  manifest warning: ${w}`);
 

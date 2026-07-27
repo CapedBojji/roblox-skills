@@ -61,8 +61,20 @@ It resolves the config, starts or reuses the dev server, resolves the story id, 
 the instance tree and any renderer warnings, and screenshots the preview. It exits non-zero on a
 render error so a failure cannot pass silently. `--help` documents every flag.
 
-Requirements: a StoryBlox project, and [Zune](https://zune.sh/) on `PATH` — the dev server refuses to
-boot without it, so there is no render path at all until it is installed.
+Requirements: a StoryBlox project, and a way to run StoryBlox. The simplest is the **standalone
+binary** (v0.1.1+), which bundles the [Zune](https://zune.sh/) Luau runtime — no Node, no
+`node_modules`, nothing else to install:
+
+```sh
+curl -sSL -o storyblox \
+  https://github.com/CapedBojji/storyblox/releases/download/v0.1.1/storyblox-linux-x64
+chmod +x storyblox
+node skills/roblox-frame-identification/scripts/preview.mjs \
+  --story src/UI/ShopPanel.story.luau --storyblox ./storyblox
+```
+
+From a source checkout, Zune must be on `PATH` — the dev server refuses to boot without it.
+(StoryBlox is not on the public npm registry, so `npx storyblox` will not resolve.)
 
 `playwright-core` is optional. Without it the script still renders the story and prints the instance
 tree and renderer warnings; only the screenshots are skipped.

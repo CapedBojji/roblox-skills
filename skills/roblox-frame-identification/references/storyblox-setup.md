@@ -4,19 +4,46 @@
 with the [Zune](https://zune.sh/) Luau runtime, and renders the returned Roblox instance tree to
 DOM/CSS in a browser.
 
-## Preflight
+## Install
+
+**Use the standalone binary (v0.1.1+).** It bundles Zune, so there is nothing else to install — no
+Node, no `node_modules`, no Zune on `PATH`. It extracts its own Zune to a temp directory at startup
+and points `zuneCommand` at it.
+
+```bash
+# linux-x64; swap for your platform
+curl -sSL -o storyblox \
+  https://github.com/CapedBojji/storyblox/releases/download/v0.1.1/storyblox-linux-x64
+chmod +x storyblox
+./storyblox dev --config ui-claps.config.ts
+```
+
+Assets are published per platform: `storyblox-linux-x64`, `storyblox-linux-arm64`,
+`storyblox-darwin-x64`, `storyblox-darwin-arm64`, `storyblox-windows-x64.exe`,
+`storyblox-windows-arm64.exe`, plus `storyblox.vsix` for the VS Code extension. Verify the download
+against the `digest` on the release asset.
+
+**From a source checkout** (the package is not on the public npm registry, so `npx storyblox`
+404s unless you have it linked locally), Zune *is* a separate prerequisite:
 
 ```bash
 node -v                 # 22+
-zune --version          # HARD REQUIREMENT — the server refuses to boot without it
+zune --version          # required on this path only
 test -d node_modules    # pnpm install
 ls ui-claps.config.ts
 ```
 
-**Zune is not optional.** `startDevServer` checks for it and throws before binding a port, so
-without Zune there is no render path at all — not a degraded one. Install it from
-<https://zune.sh/>, or with `mise use zune@0.5.7`, or set `zuneCommand` in the config to an absolute
-path to the binary.
+On that path `startDevServer` checks for Zune and throws before binding a port, so there is no
+render path at all without it. Install from <https://zune.sh/>, or `mise use zune@0.5.7`, or set
+`zuneCommand` in the config to an absolute path.
+
+One gotcha with the binary: a config that imports `defineConfig` from a *source-relative* path
+(`"./src/node/index.js"`, as the StoryBlox repo's own `ui-claps.config.ts` does) fails inside the
+bundle. Either import from `"storyblox"` or skip the helper entirely — a plain object export works:
+
+```ts
+export default { root: "src", rojoProject: "default.project.json", port: 4500, open: false };
+```
 
 ## The config
 
@@ -48,16 +75,14 @@ For a `roblox-ts` project, compile to Luau first and point `storyRoot` at the ou
 
 Four files:
 
-**`ui-claps.config.ts`**
+**`ui-claps.config.ts`** — a plain object, so it works under the standalone binary too:
 ```ts
-import { defineConfig } from "storyblox";
-
-export default defineConfig({
+export default {
   root: "src",
   rojoProject: "default.project.json",
   port: 4500,
   open: false,
-});
+};
 ```
 
 **`default.project.json`** — required, and parsed on every render, so it must be valid:
@@ -81,8 +106,11 @@ return { name = "UI" }
 
 **`src/UI/<Name>.story.luau`** — the frame itself.
 
-Then `npx storyblox dev --config ui-claps.config.ts`, or from a source checkout of StoryBlox:
-`npx tsx src/node/cli.ts dev --config <abs path>`.
+Then `./storyblox dev --config ui-claps.config.ts` with the standalone binary, or from a source
+checkout: `npx tsx src/node/cli.ts dev --config <abs path>`.
+
+This exact four-file scaffold is verified working against the v0.1.1 linux-x64 binary with no Zune
+on `PATH`.
 
 ## The story format
 
@@ -172,6 +200,46 @@ Returns:
 
 Server-sent events for hot reload. Not needed for verification.
 
+## The automation API (v0.1.1+)
+
+The binary also starts a second server aimed squarely at agents. Discover it rather than assuming
+the port:
+
+```bash
+curl -s localhost:4500/api/automation-info      # -> {"baseUrl":"http://127.0.0.1:4701"}
+```
+
+Its tree is **richer than `/api/render`'s**: every node carries a stable `id`, a populated `name`,
+`visible`, `enabled`, `text`, and an `actions` list of what that node accepts (`click`, `hover`,
+`drag`, `scroll`, `focus`, `blur`, `activate`, `pointer-*`, `key`).
+
+| Endpoint | Method | Body / result |
+|---|---|---|
+| `/api/automation/sessions` | GET | `{ sessions: [...] }` — live sessions with tree, controls, revision |
+| `/api/automation/sessions` | POST | `{ storyId }` → a session `{ sessionId, tree, controls, revision, warnings, output }` |
+| `/api/automation/sessions/:id` | GET | current session state |
+| `/api/automation/sessions/:id/query` | POST | `{ name: "Buy" }` → `{ matches: [...] }`. Needs at least one filter |
+| `/api/automation/sessions/:id/actions` | POST | `{ action: { type, target: { nodeId } } }` → the updated session, `revision` bumped |
+| `/api/automation/sessions/:id/events` | GET | SSE stream |
+
+```bash
+B=$(curl -s localhost:4500/api/automation-info | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).baseUrl')
+SID=$(curl -s -X POST -H 'content-type: application/json' -d '{"storyId":"<id>"}' \
+      $B/api/automation/sessions | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).sessionId')
+
+curl -s -X POST -H 'content-type: application/json' -d '{"name":"Buy"}' $B/api/automation/sessions/$SID/query
+curl -s -X POST -H 'content-type: application/json' \
+     -d '{"action":{"type":"click","target":{"nodeId":"node-15"}}}' $B/api/automation/sessions/$SID/actions
+```
+
+Note the shapes — the action must be **nested under `action`**, and the target is an **object with
+`nodeId`**, not a bare string. A bare string returns an internal error rather than a helpful message.
+
+For frame identification, `/api/render` is enough: the frame is static chrome and you want the
+resolved tree plus warnings. Reach for the automation API when you need to verify a state the
+default render cannot show — a hover style, a selected tab, a scrolled position, a focused
+`TextBox`.
+
 ### Story ids
 
 `id = sha1(absoluteFilePath).slice(0, 12)`. Not derivable from the filename — always resolve it from
@@ -210,7 +278,9 @@ curl -s -X POST localhost:4500/api/render \
 | Symptom | Cause | Fix |
 |---|---|---|
 | `UI Claps requires Zune to execute Luau stories` | Zune not on PATH | Install from <https://zune.sh/>, or `mise use zune@0.5.7`, or set `zuneCommand` to an absolute path. There is no render path without it |
-| `Cannot find module 'express'` | deps not installed | `pnpm install` |
+| `Cannot find module 'express'` | deps not installed | `pnpm install`, or use the standalone binary |
+| `npm error 404 'storyblox@*' is not in this registry` | `npx storyblox` fallback; not published to npm | use the standalone binary, or `--url` against a server you started |
+| `ENOENT: … open '/package.json'` from the binary | config imports `defineConfig` from a source-relative path | import from `"storyblox"`, or export a plain object |
 | `UI Claps config was not found at …` | wrong cwd, or no config | pass `--config <abs path>`, or scaffold above |
 | `ui-claps.config.ts must set root to a source directory.` | missing `root` | it is required |
 | `ui-claps.config.ts must set rojoProject to a Rojo project file.` | missing `rojoProject` | it is required, and read on every render |
@@ -228,6 +298,7 @@ curl -s -X POST localhost:4500/api/render \
 node preview.mjs --story <path/to/X.story.luau>
                  [--config <ui-claps.config.ts>]  # default: walk up from --story
                  [--url <http://host:port>]       # target an already-running server
+                 [--storyblox <path>]             # standalone binary to launch (bundles Zune)
                  [--props '<json>']               # default: {}
                  [--out <dir>]                    # default: .storyblox-verify
                  [--viewport <WxH>]               # default: 1280x720
@@ -237,9 +308,13 @@ node preview.mjs --story <path/to/X.story.luau>
                  [--json]                         # raw JSON instead of the summary
 ```
 
-Exit codes: `0` ok · `1` render error, or `--strict` with warnings · `2` Zune missing ·
-`3` dependencies missing · `4` config or Rojo project missing/invalid · `5` server never became
+Exit codes: `0` ok · `1` render error, or `--strict` with warnings · `2` the server reported Zune
+missing · `4` bad arguments, or config/Rojo project missing or invalid · `5` server never became
 ready.
+
+Zune and `node_modules` are no longer preflight failures — the script warns and lets the server's own
+startup decide, since the standalone binary needs neither. `--storyblox <path>` (or a `storyblox` on
+`PATH`) makes it launch the binary instead of `npx storyblox`.
 
 **`--props` affects `render.json` only, not the screenshot** — the preview URL has no props channel.
 That is why control defaults must match the reference.

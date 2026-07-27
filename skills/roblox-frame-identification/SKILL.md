@@ -154,11 +154,12 @@ Conventions:
 ## Phase 5 — Verify
 
 ```bash
-# preflight — all four must pass
-node -v && zune --version && test -d node_modules && ls ui-claps.config.ts
-
 # render + screenshot in one shot
 node <skill>/scripts/preview.mjs --story src/UI/ShopPanel.story.luau --out .storyblox-verify
+
+# with the standalone binary (v0.1.1+, bundles Zune — nothing else to install)
+node <skill>/scripts/preview.mjs --story src/UI/ShopPanel.story.luau \
+     --storyblox ./storyblox --out .storyblox-verify
 
 # then read .storyblox-verify/frame.png against the reference
 ```
@@ -167,11 +168,18 @@ node <skill>/scripts/preview.mjs --story src/UI/ShopPanel.story.luau --out .stor
 from the story, and writes `frame.png`, `stage.png`, `page.png` and `render.json`. It exits non-zero
 on a render error, so a failure cannot pass silently. `--help` documents every flag.
 
-Setup, the manual `curl` equivalent, the minimal four-file scaffold for a project that has no
-StoryBlox yet, and the full troubleshooting table are in `references/storyblox-setup.md`.
+**Getting a server up:** the standalone binary from the StoryBlox releases page bundles Zune and
+needs no Node or `node_modules` — download it, `chmod +x`, done. On the npm or source-checkout path
+Zune *is* a hard precondition; the dev server refuses to boot without it.
 
-**Zune is a hard precondition** — the dev server refuses to boot without it, so there is no render
-path at all until it is installed.
+Setup, the manual `curl` equivalent, the minimal four-file scaffold for a project that has no
+StoryBlox yet, the automation API, and the full troubleshooting table are in
+`references/storyblox-setup.md`.
+
+**For interactive states**, the binary also exposes an automation API (discover it via
+`GET /api/automation-info`) whose tree carries stable node ids and an `actions` list, and which can
+click, hover, scroll and focus. Frame identification rarely needs it — the frame is static chrome —
+but reach for it to verify a hover style, a selected tab, or a scrolled position.
 
 ### Compare in this order
 
