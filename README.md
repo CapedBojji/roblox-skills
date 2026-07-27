@@ -28,7 +28,7 @@ The mental model, written to displace CSS instincts rather than sit alongside th
 Element by element: what each icon, label, badge and button is *for*, which frame **owns** it, and
 where it sits relative to that frame.
 
-Exists to stop two specific errors that web instincts produce:
+Exists to stop three specific errors that web instincts produce:
 
 - **Assuming an element is inside the frame it belongs to.** Nothing clips by default in Roblox, so
   chrome routinely *straddles* an edge — a close button whose centre sits on the top-right corner, a
@@ -36,7 +36,6 @@ Exists to stop two specific errors that web instincts produce:
   error.
 - **Assuming containment decides ownership.** A button hanging entirely outside a panel still belongs
   to it; a tooltip drawn on top of it belongs to neither.
-
 - **Only examining the elements that look suspicious.** Every element gets a record — that is how a
   title ends up fully inside a panel the reference had it overhanging.
 
