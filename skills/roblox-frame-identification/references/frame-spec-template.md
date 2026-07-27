@@ -64,8 +64,12 @@ Scale/offset rationale:
 ```
 
 ## Nodes
-| Name | Class | Size | Position | AnchorPoint | Other props | Conf |
-|---|---|---|---|---|---|---|
+Role, placement class and relations come from the `roblox-element-placement` skill. `Place` is one of
+INSET / STRADDLE / OUTSIDE / CENTRED / FILL / FLOW — a STRADDLE means part of the element sits
+outside the frame on purpose, and FLOW means `Position` is layout-driven and must be left blank.
+
+| Name | Role | Class | Place | Size | Position | AnchorPoint | Relations | Conf |
+|---|---|---|---|---|---|---|---|---|
 
 ## Palette
 | Slot | Color3.fromRGB | Used by |
@@ -155,21 +159,25 @@ ShopPanel (Frame)
 ```
 
 ## Nodes
-| Name | Class | Size | Position | AnchorPoint | Other props | Conf |
-|---|---|---|---|---|---|---|
-| ShopPanel | Frame | `fromScale(0.458, 0.667)` | `fromScale(0.5, 0.5)` | `(0.5, 0.5)` | `BackgroundColor3` surface, `BorderSizePixel 0` | [M] |
-| — UICorner | UICorner | — | — | — | `CornerRadius UDim.new(0, 12)` | [E] |
-| Shadow | ImageLabel | `new(1, 24, 1, 24)` | `fromOffset(-12, -8)` | `(0, 0)` | `ZIndex 0`, 9-slice | [E] |
-| Header | Frame | `new(1, 0, 0, 56)` | `fromOffset(0, 0)` | `(0, 0)` | `BackgroundTransparency 1` | [M] |
-| Title | TextLabel | `new(0.5, 0, 1, 0)` | `fromOffset(20, 0)` | `(0, 0)` | `TextSize 22`, `TextXAlignment Left` | [E] |
-| CoinCount | TextLabel | `fromOffset(120, 24)` | `new(1, -56, 0.5, 0)` | `(1, 0.5)` | `TextSize 16`, `TextXAlignment Right` | [E] |
-| Close | ImageButton | `fromOffset(32, 32)` | `new(1, -12, 0.5, 0)` | `(1, 0.5)` | `Image rbxassetid://…` | [M] |
-| TabStrip | Frame | `new(1, -32, 0, 44)` | `fromOffset(16, 56)` | `(0, 0)` | `BackgroundTransparency 1` | [M] |
-| — UIListLayout | UIListLayout | — | — | — | `Horizontal`, `Padding UDim.new(0, 8)`, `SortOrder LayoutOrder` | [E] |
-| TabWeapons | TextButton | `fromOffset(110, 44)` | layout-driven | `(0, 0)` | `LayoutOrder 1` | [M] |
-| ItemList | ScrollingFrame | `new(1, -32, 1, -132)` | `fromOffset(16, 116)` | `(0, 0)` | `ScrollBarThickness 6`, `AutomaticCanvasSize Y`, `CanvasSize fromScale(0,0)` | [M] |
-| — UIGridLayout | UIGridLayout | — | — | — | `CellSize fromOffset(120, 120)`, `CellPadding fromOffset(8, 8)` | [M] |
-| Placeholder | Frame | `fromOffset(120, 120)` | layout-driven | `(0, 0)` | mid-grey, no text | [C] |
+Role, placement class and relations come from the `roblox-element-placement` skill. `Place` is one of
+INSET / STRADDLE / OUTSIDE / CENTRED / FILL / FLOW — a STRADDLE means part of the element sits
+outside the frame on purpose, and FLOW means `Position` is layout-driven and must be left blank.
+
+| Name | Role | Class | Place | Size | Position | AnchorPoint | Relations | Conf |
+|---|---|---|---|---|---|---|---|---|
+| ShopPanel | panel | Frame | — | `fromScale(0.458, 0.667)` | `fromScale(0.5, 0.5)` | `(0.5, 0.5)` | — | [M] |
+| — UICorner | — | UICorner | — | — | — | — | modifier | [E] |
+| Shadow | drop shadow | ImageLabel | FILL (neg. gutter) | `new(1, 24, 1, 24)` | `fromOffset(-12, -8)` | `(0, 0)` | `ZIndex 0`, behind panel | [E] |
+| Header | group | Frame | INSET | `new(1, 0, 0, 56)` | `fromOffset(0, 0)` | `(0, 0)` | contains Title, CoinCount | [M] |
+| Title | header title | TextLabel | STRADDLE top | `new(0.5, 0, 1, 0)` | `fromOffset(20, 0)` | `(0, 0.5)` | ink overhangs top edge | [E] |
+| CoinCount | currency readout | TextLabel | INSET | `fromOffset(120, 24)` | `new(1, -56, 0.5, 0)` | `(1, 0.5)` | `right-of` Title | [E] |
+| Close | close button | ImageButton | STRADDLE top+right | `fromOffset(32, 32)` | `new(1, -12, 0, 16)` | `(0.5, 0.5)` | `centre-aligned-y` Header | [M] |
+| TabStrip | tab strip | Frame | INSET | `new(1, -32, 0, 44)` | `fromOffset(16, 56)` | `(0, 0)` | `immediately-below` Header | [M] |
+| — UIListLayout | — | UIListLayout | — | — | — | — | `Horizontal`, `Padding (0,8)`, `SortOrder LayoutOrder` | [E] |
+| TabWeapons | tab | TextButton | FLOW | `fromOffset(110, 44)` | *layout-driven* | `(0, 0)` | `LayoutOrder 1`; `same-size-as` sibling tabs | [M] |
+| ItemList | scroll container | ScrollingFrame | INSET | `new(1, -32, 1, -132)` | `fromOffset(16, 116)` | `(0, 0)` | `immediately-below` TabStrip | [M] |
+| — UIGridLayout | — | UIGridLayout | — | — | — | — | `CellSize (0,120)`, `CellPadding (0,8)` | [M] |
+| Placeholder | item slot | Frame | FLOW | `fromOffset(120, 120)` | *layout-driven* | `(0, 0)` | stands in for content | [C] |
 
 `TabArmor` and `TabPotions` match `TabWeapons` with `LayoutOrder` 2 and 3.
 

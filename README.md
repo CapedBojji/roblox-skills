@@ -37,15 +37,25 @@ Exists to stop two specific errors that web instincts produce:
 - **Assuming containment decides ownership.** A button hanging entirely outside a panel still belongs
   to it; a tooltip drawn on top of it belongs to neither.
 
-`scripts/place.mjs` makes this deterministic — give it two bounding boxes and it returns the signed
-edge deltas, the placement class, and the exact `Size`/`AnchorPoint`/`Position` to reproduce it:
+- **Only examining the elements that look suspicious.** Every element gets a record — that is how a
+  title ends up fully inside a panel the reference had it overhanging.
+
+For each element it produces five facts: **visual → role → owner → placement → relations**. The role
+taxonomy gives each element an *expected* placement to check the measurement against; relations
+(`immediately-right-of`, `centre-aligned-y`, `evenly-spaced-with`) are how a `UIListLayout` gets
+*discovered* instead of everything being hand-placed.
+
+`scripts/place.mjs` makes it deterministic — bounding boxes in, signed edge deltas, placement class,
+exact anchors, plus relations and the groups they imply:
 
 ```sh
-node skills/roblox-element-placement/scripts/place.mjs \
-  --frame 95,84,961,570 --element 923,78,972,125 --name Close
-# CLASS: STRADDLE — 6px past the top edge, 11px past the right edge
-# AnchorPoint = Vector2.new(0.5, 0.5)
-# Position    = UDim2.new(1, -13, 0, 18)
+node skills/roblox-element-placement/scripts/place.mjs --frame 95,87,961,570 \
+  --element "HeaderIcon:74,76,121,132" --element "Title:135,75,400,123"
+# Title  CLASS: STRADDLE — 12px past the top edge
+#        AnchorPoint = Vector2.new(0.5, 0.5)   Position = UDim2.new(0, 173, 0, 12)
+# RELATIONS  Title immediately-right-of HeaderIcon  gap 14px
+#            Title centre-aligned-y     HeaderIcon  Δ5px
+# GROUPS     HeaderIcon + Title -> UIListLayout{ Horizontal, Padding 14, VerticalAlignment Center }
 ```
 
 ### `roblox-frame-identification`

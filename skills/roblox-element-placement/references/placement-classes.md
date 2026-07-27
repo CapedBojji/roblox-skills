@@ -161,7 +161,13 @@ via `UIFlexItem.ItemLineAlignment`.
 
 An icon 8px to the left of a label; a badge on the corner of a *tab* rather than the panel.
 
-Roblox has no "relative to sibling" primitive. Three honest options, in order of preference:
+This is not a defect to refactor away — it is often the **truest description** of the layout, and
+`relations.md` treats it as first-class output. "Immediately right of the header icon, sharing its
+centre line" survives a change in icon width; "62px from the left edge" does not. Record the relation
+first, then choose how to express it.
+
+Roblox has no "relative to sibling" primitive, so it must be expressed structurally. Three options,
+in order of preference:
 
 1. **Re-parent.** Make the element a child of the sibling it tracks, then it is a straddle or inset
    on *that* parent. A notification dot on a tab belongs to the tab.
@@ -170,6 +176,10 @@ Roblox has no "relative to sibling" primitive. Three honest options, in order of
 
 If a placement table has an element whose "owner" is really a sibling, that is a signal the tree is
 wrong. Fix the hierarchy rather than encoding the relationship in arithmetic.
+
+**When a group straddles the frame, the group straddles — not each member.** Put the overhang on the
+container and let the members flow inside it, so changing one member's size does not require
+re-deriving every sibling's offset. See `relations.md`.
 
 ---
 
