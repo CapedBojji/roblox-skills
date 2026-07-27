@@ -47,7 +47,7 @@ error, one element over. **Every element gets a record.** No exceptions, no spot
 ```bash
 node <skill>/scripts/place.mjs --frame 95,87,961,570 \
   --element "HeaderIcon:74,76,121,132" \
-  --element "Title:135,82,400,121" \
+  --element "Title:135,75,400,123" \
   --element "Close:923,78,972,125"
 ```
 
@@ -61,15 +61,44 @@ One call with every element, not one call per element — that is what produces 
 Title — header title
   visual : "BACKPACK", heavy outlined display face, white glyphs on a black stroke
   owner  : BackpackPanel — it names the panel (purpose test)
-  place  : STRADDLE top — ink box overhangs 12px above the top edge; centre 22px below it
-  rel    : immediately-right-of HeaderIcon (14px); centre-aligned-y with it (Δ3px)
+  place  : STRADDLE top — ink box overhangs 12px above the panel's top edge
+  rel    : immediately-right-of HeaderIcon (14px); TOP-aligned with it (Δ1px — the centres are
+           5px apart, so this is a top-aligned row, not a centred one)
   group  : Header (HeaderIcon + Title) — horizontal run, so the GROUP straddles and members flow
-  maps to: TextLabel + TextStrokeTransparency; Text is a control
+  maps to: TextLabel, TextSize 66 (48px measured ink / 0.72); Text is a control
   check  : expected STRADDLE top for a heavy display title — agrees
+  verify : left +0, top +0.5, ink height -0.5 vs reference — within tolerance
 ```
 
 Every field is mandatory. `check` is where a disagreement between the role's convention and the
 measurement gets stated out loud rather than quietly resolved in favour of whichever came first.
+
+## A placement is not verified until the diff passes
+
+Measure reference → build → render → **measure render** → diff. Comparing a render to a reference by
+eye catches wrong colours and misses an 11px vertical error every time.
+
+```bash
+# render, and capture every node's exact DOM box
+node <frame-id-skill>/scripts/preview.mjs --story src/UI/Panel.story.luau --boxes --out .verify
+
+# diff that against the reference measurements, fail-closed
+node <skill>/scripts/verify-placement.mjs --boxes .verify/boxes.json --reference refs/panel.json
+```
+
+`refs/panel.json` is the same numbers already fed to `place.mjs`:
+
+```json
+{ "frame": [95,87,961,570],
+  "elements": { "HeaderIcon": [74,76,121,132], "Title": [135,75,400,123] },
+  "text": ["Title"] }
+```
+
+It exits non-zero on any element outside tolerance, and for text it additionally checks that the
+glyphs actually **fill** their box — a box in exactly the right place whose text renders at
+two-thirds the intended size is a real defect that box geometry alone cannot see.
+
+Only after the diff passes are the eyes useful, and only for colour, type and texture.
 
 ## Placement classes
 

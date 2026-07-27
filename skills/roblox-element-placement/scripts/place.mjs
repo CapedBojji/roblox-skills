@@ -193,28 +193,36 @@ export function relate(a, b, tolerance = 3) {
 // A run: elements chained by immediate adjacency on one axis AND aligned on the other.
 export function findRuns(elements, tolerance = 3) {
   const runs = [];
-  for (const [axis, sortKey, alignFn, gapFn] of [
-    ["Horizontal", (e) => e.box.x0, (a, b) => Math.abs(cy(a.box) - cy(b.box)), (a, b) => b.box.x0 - a.box.x1],
-    ["Vertical", (e) => e.box.y0, (a, b) => Math.abs(cx(a.box) - cx(b.box)), (a, b) => b.box.y0 - a.box.y1],
+  // Cross-axis agreement is tested BOTH ways: centres and leading edges. A row whose centres are
+  // 5px apart but whose tops are 1px apart is top-aligned, and suggesting Center puts every member
+  // with a different size in the wrong place.
+  for (const [axis, sortKey, centreFn, edgeFn, gapFn] of [
+    ["Horizontal", (e) => e.box.x0,
+      (a, b) => Math.abs(cy(a.box) - cy(b.box)), (a, b) => Math.abs(a.box.y0 - b.box.y0),
+      (a, b) => b.box.x0 - a.box.x1],
+    ["Vertical", (e) => e.box.y0,
+      (a, b) => Math.abs(cx(a.box) - cx(b.box)), (a, b) => Math.abs(a.box.x0 - b.box.x0),
+      (a, b) => b.box.y0 - a.box.y1],
   ]) {
     const sorted = [...elements].sort((p, q) => sortKey(p) - sortKey(q));
     let cur = [sorted[0]];
-    const gaps = [];
+    const gaps = [], centreDeltas = [], edgeDeltas = [];
     for (let i = 1; i < sorted.length; i += 1) {
       const prev = sorted[i - 1], el = sorted[i];
       const gap = gapFn(prev, el);
-      const aligned = alignFn(prev, el) <= Math.max(tolerance, 6);
+      const dCentre = centreFn(prev, el), dEdge = edgeFn(prev, el);
+      const aligned = Math.min(dCentre, dEdge) <= Math.max(tolerance, 6);
       const limit = axis === "Horizontal"
         ? Math.max(24, 0.5 * Math.min(wOf(prev.box), wOf(el.box)))
         : Math.max(24, 0.5 * Math.min(hOf(prev.box), hOf(el.box)));
       if (aligned && gap >= -tolerance && gap <= limit) {
-        cur.push(el); gaps.push(gap);
+        cur.push(el); gaps.push(gap); centreDeltas.push(dCentre); edgeDeltas.push(dEdge);
       } else {
-        if (cur.length >= 2) runs.push({ axis, members: cur, gaps: [...gaps] });
-        cur = [el]; gaps.length = 0;
+        if (cur.length >= 2) runs.push({ axis, members: cur, gaps: [...gaps], centreDeltas: [...centreDeltas], edgeDeltas: [...edgeDeltas] });
+        cur = [el]; gaps.length = 0; centreDeltas.length = 0; edgeDeltas.length = 0;
       }
     }
-    if (cur.length >= 2) runs.push({ axis, members: cur, gaps: [...gaps] });
+    if (cur.length >= 2) runs.push({ axis, members: cur, gaps: [...gaps], centreDeltas: [...centreDeltas], edgeDeltas: [...edgeDeltas] });
   }
   return runs;
 }
@@ -333,8 +341,15 @@ function main() {
       console.log(`    gaps ${r.gaps.map(round).join(", ")}px  (mean ${avg}, spread ${round(spread)})`);
       console.log(`    group box: x ${round(b.x0)}–${round(b.x1)}, y ${round(b.y0)}–${round(b.y1)}`);
       if (spread <= Math.max(args.tolerance, 4)) {
-        const align = r.axis === "Horizontal" ? "VerticalAlignment = Enum.VerticalAlignment.Center"
-                                              : "HorizontalAlignment = Enum.HorizontalAlignment.Center";
+        const mean = (xs) => xs.reduce((s, v) => s + v, 0) / Math.max(1, xs.length);
+        const mc = mean(r.centreDeltas ?? []), me = mean(r.edgeDeltas ?? []);
+        const edgeWins = me + 0.5 < mc;
+        const prop = r.axis === "Horizontal" ? "VerticalAlignment = Enum.VerticalAlignment"
+                                             : "HorizontalAlignment = Enum.HorizontalAlignment";
+        const which = edgeWins ? (r.axis === "Horizontal" ? "Top" : "Left") : "Center";
+        const align = `${prop}.${which}`;
+        console.log(`    cross-axis: centres agree to ${round(mc)}px, leading edges to ${round(me)}px` +
+                    `  ->  ${which}`);
         console.log(`    suggests: UIListLayout{ FillDirection = Enum.FillDirection.${r.axis},`);
         console.log(`                            Padding = UDim.new(0, ${avg}), ${align},`);
         console.log(`                            SortOrder = Enum.SortOrder.LayoutOrder }`);

@@ -58,6 +58,34 @@ Defences, in order:
    measurement was reliable on the first try.
 4. **Re-measure with a different window** and require agreement.
 
+## Measure the RENDER through the DOM, never through pixels
+
+Everything above is about the reference, where pixels are all you have. The render is different: the
+StoryBlox renderer tags every node with `data-ui-claps-path`, so `preview.mjs --boxes` reads each
+node's exact `getBoundingClientRect()` and writes `boxes.json` with panel-relative coordinates and
+the computed font size.
+
+**Never measure the render from its screenshot.** Two artefacts encountered while doing exactly that:
+
+- An element screenshot includes whatever is behind the element inside its box. The top ~15px of a
+  `stage.png` was solid white *page background*, which a "white = glyph" predicate reported as 500px
+  of title ink.
+- Glyphs are drawn with subpixel antialiasing, so their edges carry blue and orange fringing. Any
+  strict colour test either misses those pixels or catches neighbouring ones.
+
+`boxes.json` has neither problem, and `verify-placement.mjs` diffs it against the reference numbers.
+
+## Text width is font-dependent — do not compare it
+
+The same string at the same cap height occupies a very different width in a condensed display face
+than in the preview's font stack: 265px versus ~400px for one 8-character title. **Left edge, top
+edge and ink height are real geometry. Width is not.** Size text boxes for the widest font you
+expect, and compare only the parts that mean something.
+
+`TextScaled` does not help here: the StoryBlox renderer does not implement it. `fontSize` comes from
+`TextSize`, clamped by `UITextSizeConstraint`. To make ink match a measured ink height, set
+`TextSize ≈ inkHeight / 0.72`.
+
 ## Tolerance
 
 **~3px is flush.** Anti-aliasing, outlines and compression all move an edge by a pixel or two.

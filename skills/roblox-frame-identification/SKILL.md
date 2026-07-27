@@ -186,7 +186,21 @@ StoryBlox yet, the automation API, and the full troubleshooting table are in
 click, hover, scroll and focus. Frame identification rarely needs it — the frame is static chrome —
 but reach for it to verify a hover style, a selected tab, or a scrolled position.
 
-### Compare in this order
+### Measure first, then look
+
+**Before reading any image, run the numeric diff.** Geometry is measured, not eyeballed:
+
+```bash
+node <skill>/scripts/preview.mjs --story <story> --boxes --out .verify
+node ../roblox-element-placement/scripts/verify-placement.mjs \
+     --boxes .verify/boxes.json --reference refs/<name>.json
+```
+
+`--boxes` records each node's exact DOM bounding box, so the render side needs no pixel measurement
+at all. Every placement bug found in this skill's development was a few pixels of vertical offset —
+invisible to a visual comparison, obvious to a diff.
+
+### Then compare in this order
 
 Fix in priority order; do not jump to detail while the silhouette is wrong.
 

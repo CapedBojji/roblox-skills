@@ -53,8 +53,9 @@ node skills/roblox-element-placement/scripts/place.mjs --frame 95,87,961,570 \
 # Title  CLASS: STRADDLE — 12px past the top edge
 #        AnchorPoint = Vector2.new(0.5, 0.5)   Position = UDim2.new(0, 173, 0, 12)
 # RELATIONS  Title immediately-right-of HeaderIcon  gap 14px
-#            Title centre-aligned-y     HeaderIcon  Δ5px
-# GROUPS     HeaderIcon + Title -> UIListLayout{ Horizontal, Padding 14, VerticalAlignment Center }
+# GROUPS     HeaderIcon + Title  [horizontal run]
+#            cross-axis: centres agree to 5px, leading edges to 1px  ->  Top
+#            suggests UIListLayout{ Horizontal, Padding 14, VerticalAlignment Top }
 ```
 
 ### `roblox-frame-identification`
@@ -94,6 +95,22 @@ node skills/roblox-frame-identification/scripts/preview.mjs \
 It resolves the config, starts or reuses the dev server, resolves the story id, renders it, prints
 the instance tree and any renderer warnings, and screenshots the preview. It exits non-zero on a
 render error so a failure cannot pass silently. `--help` documents every flag.
+
+**Geometry is measured, not eyeballed.** `--boxes` records every node's exact DOM bounding box, and
+`verify-placement.mjs` diffs that against the reference measurements, failing closed:
+
+```sh
+node skills/roblox-frame-identification/scripts/preview.mjs \
+  --story src/UI/Panel.story.luau --boxes --out .verify
+node skills/roblox-element-placement/scripts/verify-placement.mjs \
+  --boxes .verify/boxes.json --reference refs/panel.json
+# Title
+#   top        ref     -12   render   -11.5   Δ   +0.5   ok
+#   ink height ref      48   render    47.5   Δ   -0.5   ok     fontSize 66px
+```
+
+Every placement bug found while building these skills was a few pixels of vertical offset —
+invisible in a side-by-side, obvious in a diff.
 
 Requirements: a StoryBlox project, and a way to run StoryBlox. The simplest is the **standalone
 binary** (v0.1.1+), which bundles the [Zune](https://zune.sh/) Luau runtime — no Node, no

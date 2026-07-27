@@ -84,6 +84,32 @@ group's box does too — so the group is what straddles, and its members become 
 is much more robust than giving each member its own overhanging position: change the icon's width
 and the title follows automatically.
 
+## Test top-alignment as well as centre-alignment
+
+`centre-aligned-y` within tolerance does not prove the author centred anything. Check the **tops**
+too and take whichever agrees more tightly.
+
+In the reference used here, the header icon and title have centres 5px apart but tops 1px apart.
+They are top-aligned, and a `UIListLayout` with `VerticalAlignment = Center` puts the title 5px too
+low — an error small enough to survive any visual comparison and large enough to be wrong. The
+numeric diff is what separates the two hypotheses.
+
+## Anchor a group by the edge it straddles
+
+A group's `Position` should be expressed from the edge it is pinned to, with `AnchorPoint` on that
+same edge — not from its centre. Centre-anchoring makes the group's left edge depend on the *total
+width of its members*, so widening one member silently drags the whole group sideways.
+
+```lua
+-- WRONG: widen the title and the group's left edge moves
+AnchorPoint = Vector2.new(0.5, 0.5)
+Position    = UDim2.new(0, 142, 0, 17)
+
+-- RIGHT: the straddled edge is pinned; member sizes cannot move it
+AnchorPoint = Vector2.new(0, 0)
+Position    = UDim2.new(0, -21, 0, -11.5)
+```
+
 ## When *not* to make a group
 
 - **Two elements, uneven gap, no shared alignment.** Just position them.

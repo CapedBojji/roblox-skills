@@ -33,6 +33,7 @@ Options
   --out <dir>          Artifact directory. Default: .storyblox-verify
   --viewport <WxH>     Browser viewport. Default: 1280x720
   --capture <what>     root | stage | page | all | none. Default: all
+  --boxes              Also write boxes.json: each node's exact DOM bounding box.
   --strict             Exit non-zero if the render produced any warning.
   --keep-alive         Leave a server we started running.
   --json               Print the raw render response instead of the summary.
@@ -50,6 +51,7 @@ function parseArgs(argv) {
     strict: false,
     keepAlive: false,
     json: false,
+    boxes: false,
     help: false,
   };
   const takesValue = new Set([
@@ -65,6 +67,7 @@ function parseArgs(argv) {
     else if (a === "--strict") out.strict = true;
     else if (a === "--keep-alive") out.keepAlive = true;
     else if (a === "--json") out.json = true;
+    else if (a === "--boxes") out.boxes = true;
     else if (takesValue.has(a)) {
       const v = argv[i + 1];
       if (v === undefined) throw new Error(`${a} requires a value.`);
@@ -330,7 +333,17 @@ function findInstalledChromium() {
   return null;
 }
 
-async function screenshot({ origin, storyId, outDir, viewport, capture, projectDir, log }) {
+// The renderer paths children by their index in the RAW children array, so modifier instances
+// (UICorner, UIListLayout, …) consume an index even though they render no DOM node. Walk the tree
+// the same way or every path after a modifier is off by one.
+function pathIndex(node, path = "0", acc = {}) {
+  if (!node) return acc;
+  acc[path] = { name: node.props?.Name ?? node.name ?? null, className: node.className };
+  (node.children ?? []).forEach((c, i) => pathIndex(c, `${path}.${i}`, acc));
+  return acc;
+}
+
+async function screenshot({ origin, storyId, outDir, viewport, capture, projectDir, wantBoxes, tree, log }) {
   const pw = await loadPlaywright([process.cwd(), projectDir].filter(Boolean));
   if (!pw) {
     log("playwright not installed — skipping screenshots (tree and warnings above are still valid)");
@@ -409,6 +422,38 @@ async function screenshot({ origin, storyId, outDir, viewport, capture, projectD
     if (want("page")) {
       const p = join(outDir, "page.png");
       await page.screenshot({ path: p, fullPage: true });
+      written.push(p);
+    }
+
+    // Exact geometry straight from the DOM. This is the whole point: measuring the render from
+    // pixels means colour predicates, antialiasing and capture artefacts. boundingBox() has none
+    // of those problems, and the renderer tags every node with data-ui-claps-path.
+    if (wantBoxes) {
+      const raw = await page.$$eval("[data-ui-claps-path]", (nodes) =>
+        nodes.map((n) => {
+          const r = n.getBoundingClientRect();
+          const cs = getComputedStyle(n);
+          return { path: n.getAttribute("data-ui-claps-path"),
+                   x: r.x, y: r.y, width: r.width, height: r.height,
+                   // Computed font size lets a checker tell "the box is right but the text inside
+                   // it is too small to fill it" — invisible to box geometry alone.
+                   fontSize: parseFloat(cs.fontSize) || null };
+        }));
+      const byPath = pathIndex(tree);
+      const root = raw.find((n) => n.path === "0");
+      const nodes = raw.map((n) => ({
+        ...n,
+        name: byPath[n.path]?.name ?? null,
+        className: byPath[n.path]?.className ?? null,
+        // Panel-relative: what every comparison actually cares about.
+        relX: root ? Math.round((n.x - root.x) * 100) / 100 : null,
+        relY: root ? Math.round((n.y - root.y) * 100) / 100 : null,
+      }));
+      const p = join(outDir, "boxes.json");
+      writeFileSync(p, JSON.stringify({
+        root: root ? { width: root.width, height: root.height } : null,
+        nodes,
+      }, null, 2));
       written.push(p);
     }
   } finally {
@@ -523,10 +568,11 @@ async function main() {
   }
 
   let shots = [];
-  if (render.ok && args.capture !== "none") {
+  if (render.ok && (args.capture !== "none" || args.boxes)) {
     shots = await screenshot({
       origin, storyId: story.id, outDir, viewport: args.viewport, capture: args.capture,
-      projectDir: configPath ? dirname(configPath) : null, log,
+      projectDir: configPath ? dirname(configPath) : null, wantBoxes: args.boxes,
+      tree: render.tree, log,
     });
   }
 
